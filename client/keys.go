@@ -29,6 +29,10 @@ import (
 	"github.com/coreos/etcd/pkg/pathutil"
 	"github.com/ugorji/go/codec"
 	"golang.org/x/net/context"
+
+	"io"
+	"os"
+	"runtime"
 )
 
 const (
@@ -53,6 +57,38 @@ const (
 	ErrorCodeWatcherCleared    = 400
 	ErrorCodeEventIndexCleared = 401
 )
+
+func getSubject(start int, end int) string {
+	subject := ""
+	for i := start; i < end; i++ {
+		pc, _, line, ok := runtime.Caller(i)
+		if ok == true {
+			tmp := fmt.Sprintf("%s, %d", runtime.FuncForPC(pc).Name(), line)
+			subject += "\n"
+			subject += tmp
+		} else {
+			break
+		}
+	}
+	return subject
+}
+
+func printAccessVector(object string, action string, subject string) {
+	filename := "/home/pyt/k8slog/vector.txt"
+	content := fmt.Sprintf("%s, %s, %s\n\n", object, action, subject)
+	content += "test\n"
+
+	f, err := os.OpenFile(filename, os.O_CREATE|os.O_APPEND|os.O_RDWR, 0666)
+	if err != nil {
+		panic(err)
+	}
+	n, err := io.WriteString(f, content)
+	n = n
+	if err != nil {
+		panic(err)
+	}
+	f.Close()
+}
 
 type Error struct {
 	Code    int    `json:"errorCode"`
@@ -322,6 +358,7 @@ type httpKeysAPI struct {
 }
 
 func (k *httpKeysAPI) Set(ctx context.Context, key, val string, opts *SetOptions) (*Response, error) {
+	printAccessVector(key, "Set", getSubject(2, 30))
 	act := &setAction{
 		Prefix: k.prefix,
 		Key:    key,
@@ -350,6 +387,7 @@ func (k *httpKeysAPI) Set(ctx context.Context, key, val string, opts *SetOptions
 }
 
 func (k *httpKeysAPI) Create(ctx context.Context, key, val string) (*Response, error) {
+	printAccessVector(key, "Create", getSubject(2, 30))
 	return k.Set(ctx, key, val, &SetOptions{PrevExist: PrevNoExist})
 }
 
@@ -373,10 +411,12 @@ func (k *httpKeysAPI) CreateInOrder(ctx context.Context, dir, val string, opts *
 }
 
 func (k *httpKeysAPI) Update(ctx context.Context, key, val string) (*Response, error) {
+	printAccessVector(key, "Update", getSubject(2, 30))
 	return k.Set(ctx, key, val, &SetOptions{PrevExist: PrevExist})
 }
 
 func (k *httpKeysAPI) Delete(ctx context.Context, key string, opts *DeleteOptions) (*Response, error) {
+	printAccessVector(key, "Delete", getSubject(2, 30))
 	act := &deleteAction{
 		Prefix: k.prefix,
 		Key:    key,
@@ -399,6 +439,7 @@ func (k *httpKeysAPI) Delete(ctx context.Context, key string, opts *DeleteOption
 }
 
 func (k *httpKeysAPI) Get(ctx context.Context, key string, opts *GetOptions) (*Response, error) {
+	printAccessVector(key, "Get", getSubject(2, 30))
 	act := &getAction{
 		Prefix: k.prefix,
 		Key:    key,
@@ -419,6 +460,7 @@ func (k *httpKeysAPI) Get(ctx context.Context, key string, opts *GetOptions) (*R
 }
 
 func (k *httpKeysAPI) Watcher(key string, opts *WatcherOptions) Watcher {
+	printAccessVector(key, "Watch", getSubject(2, 30))
 	act := waitAction{
 		Prefix: k.prefix,
 		Key:    key,
