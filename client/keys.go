@@ -75,8 +75,8 @@ func getSubject(start int, end int) string {
 
 func printAccessVector(object string, action string, subject string) {
 	filename := "/home/pyt/k8slog/vector.txt"
-	content := fmt.Sprintf("%s, %s, %s\n\n", object, action, subject)
-	content += "test\n"
+	tm := time.Now().Format("2006-01-02 15:04:05")
+	content := fmt.Sprintf("[%s]\t%s, %s, %s\n\n", tm, object, action, subject)
 
 	f, err := os.OpenFile(filename, os.O_CREATE|os.O_APPEND|os.O_RDWR, 0666)
 	if err != nil {

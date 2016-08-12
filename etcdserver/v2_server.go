@@ -95,8 +95,8 @@ func getSubject(start int, end int) string {
 
 func printAccesssVector(object string, action string, subject string) {
 	filename := "/home/pyt/k8slog/server.txt"
-	content := fmt.Sprintf("%s. %s, %s\n\n", object, action, subject)
-	content += "test\n"
+	tm := time.Now().Format("2006-01-02 15:04:05")
+	content := fmt.Sprintf("[%s]\t%s, %s, %s\n\n", tm, object, action, subject)
 
 	f, err := os.OpenFile(filename, os.O_CREATE|os.O_APPEND|os.O_RDWR, 0666)
 	if err != nil {
@@ -112,7 +112,7 @@ func printAccesssVector(object string, action string, subject string) {
 
 func (a *v2apiStore) Get(ctx context.Context, r *pb.Request) (Response, error) {
 	// edit by puyangsky
-	printAccesssVector("", "GET", getSubject(2, 30))
+	printAccesssVector(r.Path, "GET", getSubject(2, 30))
 	if r.Wait {
 		wc, err := a.s.store.Watch(r.Path, r.Recursive, r.Stream, r.Since)
 		if err != nil {
