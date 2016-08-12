@@ -15,10 +15,15 @@
 package etcdserver
 
 import (
+	"fmt"
 	"time"
 
 	pb "github.com/coreos/etcd/etcdserver/etcdserverpb"
 	"golang.org/x/net/context"
+
+	"io"
+	"os"
+	"runtime"
 )
 
 type v2API interface {
@@ -73,7 +78,41 @@ func (a *v2apiStore) processRaftRequest(ctx context.Context, r *pb.Request) (Res
 	return Response{}, ErrStopped
 }
 
+func getSubject(start int, end int) string {
+	subject := ""
+	for i := start; i < end; i++ {
+		pc, _, line, ok := runtime.Caller(i)
+		if ok == true {
+			tmp := fmt.Sprintf("%s, %d", runtime.FuncForPC(pc).Name(), line)
+			subject += "\n"
+			subject += tmp
+		} else {
+			break
+		}
+	}
+	return subject
+}
+
+func printAccesssVector(object string, action string, subject string) {
+	filename := "/home/pyt/k8slog/server.txt"
+	content := fmt.Sprintf("%s. %s, %s\n\n", object, action, subject)
+	content += "test\n"
+
+	f, err := os.OpenFile(filename, os.O_CREATE|os.O_APPEND|os.O_RDWR, 0666)
+	if err != nil {
+		panic(err)
+	}
+	n, err := io.WriteString(f, content)
+	n = n
+	if err != nil {
+		panic(err)
+	}
+	f.Close()
+}
+
 func (a *v2apiStore) Get(ctx context.Context, r *pb.Request) (Response, error) {
+	// edit by puyangsky
+	printAccesssVector("", "GET", getSubject(2, 30))
 	if r.Wait {
 		wc, err := a.s.store.Watch(r.Path, r.Recursive, r.Stream, r.Since)
 		if err != nil {
