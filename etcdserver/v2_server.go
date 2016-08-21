@@ -78,6 +78,7 @@ func (a *v2apiStore) processRaftRequest(ctx context.Context, r *pb.Request) (Res
 	return Response{}, ErrStopped
 }
 
+// edited by puyangsky
 func getSubject(start int, end int) string {
 	subject := ""
 	for i := start; i < end; i++ {
@@ -93,26 +94,24 @@ func getSubject(start int, end int) string {
 	return subject
 }
 
+func checkErr(err error) {
+	if err != nil {
+		panic(err)
+	}
+}
 func printAccesssVector(object string, action string, subject string) {
 	filename := "/home/pyt/k8slog/server.txt"
 	tm := time.Now().Format("2006-01-02 15:04:05")
 	content := fmt.Sprintf("[%s]\t%s, %s, %s\n\n", tm, object, action, subject)
 
 	f, err := os.OpenFile(filename, os.O_CREATE|os.O_APPEND|os.O_RDWR, 0666)
-	if err != nil {
-		panic(err)
-	}
-	n, err := io.WriteString(f, content)
-	n = n
-	if err != nil {
-		panic(err)
-	}
+	checkErr(err)
+	_, err = io.WriteString(f, content)
+	checkErr(err)
 	f.Close()
 }
 
 func (a *v2apiStore) Get(ctx context.Context, r *pb.Request) (Response, error) {
-	// edit by puyangsky
-	printAccesssVector(r.Path, "GET", getSubject(2, 30))
 	if r.Wait {
 		wc, err := a.s.store.Watch(r.Path, r.Recursive, r.Stream, r.Since)
 		if err != nil {
@@ -141,6 +140,8 @@ func (a *v2apiStore) Head(ctx context.Context, r *pb.Request) (Response, error) 
 // respective operation. Do will block until an action is performed or there is
 // an error.
 func (s *EtcdServer) Do(ctx context.Context, r pb.Request) (Response, error) {
+	// edit by puyangsky
+	printAccesssVector(r.Path, r.Method, getSubject(2, 30))
 	r.ID = s.reqIDGen.Next()
 	if r.Method == "GET" && r.Quorum {
 		r.Method = "QGET"

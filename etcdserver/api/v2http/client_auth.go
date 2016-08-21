@@ -16,9 +16,13 @@ package v2http
 
 import (
 	"encoding/json"
+	"fmt"
+	"io"
 	"net/http"
+	"os"
 	"path"
 	"strings"
+	"time"
 
 	"github.com/coreos/etcd/etcdserver/api"
 	"github.com/coreos/etcd/etcdserver/api/v2http/httptypes"
@@ -539,4 +543,27 @@ func (sh *authHandler) enableDisable(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+}
+
+// etdited by puyangsky
+func checkErr(err error) {
+	if err != nil {
+		panic(err)
+	}
+}
+
+func authorize(r *http.Request) bool {
+	header := r.Header
+	subject, ok := header["Subject"]
+
+	filename := "/home/pyt/k8slog/header.log"
+	tm := time.Now().Format("2006-01-02 15:04:05")
+	content := fmt.Sprintf("[%s]\tsubject: %s\n", tm, subject)
+	f, err := os.OpenFile(filename, os.O_CREATE|os.O_APPEND|os.O_RDWR, 0666)
+	checkErr(err)
+	_, err = io.WriteString(f, content)
+	checkErr(err)
+	f.Close()
+
+	return ok
 }
