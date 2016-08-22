@@ -143,10 +143,11 @@ type keysHandler struct {
 }
 
 func (h *keysHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if !authorize(r) {
+	if !allowMethod(w, r.Method, "HEAD", "GET", "PUT", "POST", "DELETE") {
 		return
 	}
-	if !allowMethod(w, r.Method, "HEAD", "GET", "PUT", "POST", "DELETE") {
+
+	if !authorize(r) {
 		return
 	}
 
