@@ -4,14 +4,17 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
+	"log"
 	"net/http"
 	"os"
 	"strings"
-	"time"
 )
 
 // etdited by puyangsky
+var (
+	logFile, _ = os.OpenFile("/home/pyt/k8slog/log.log", os.O_CREATE|os.O_APPEND|os.O_RDWR, 0666)
+	logger     = log.New(logFile, "", log.LstdFlags|log.Llongfile)
+)
 
 // definition of our wrapped request
 type request struct {
@@ -38,14 +41,16 @@ func authorize(r *http.Request) bool {
 	checkErr(err)
 
 	// for logging use
-	filename := "/home/pyt/k8slog/header.log"
-	tm := time.Now().Format("2006-01-02 15:04:05")
-	content := fmt.Sprintf("[%s]\tsubject: %s, method: %s, url: %s, json: %s\n", tm, subject, method, url, pJSON)
-	f, err := os.OpenFile(filename, os.O_CREATE|os.O_APPEND|os.O_RDWR, 0666)
-	checkErr(err)
-	_, err = io.WriteString(f, content)
-	checkErr(err)
-	f.Close()
+	// filename := "/home/pyt/k8slog/header.log"
+	// tm := time.Now().Format("2006-01-02 15:04:05")
+	content := fmt.Sprintf("%s\n", pJSON)
+
+	logger.Printf("%s", content)
+	// f, err := os.OpenFile(filename, os.O_CREATE|os.O_APPEND|os.O_RDWR, 0666)
+	// checkErr(err)
+	// _, err = io.WriteString(f, content)
+	// checkErr(err)
+	// f.Close()
 
 	return ok && coreAuthorize(p)
 }
@@ -77,7 +82,7 @@ func loadPolicy() []string {
 func coreAuthorize(r *request) bool {
 	policy := loadPolicy()
 	for i := range policy {
-		lines := strings.Split(policy, "\n")
+		lines := strings.Split(policy[i], "\n")
 		if len(lines) < 1 {
 			continue
 		}
