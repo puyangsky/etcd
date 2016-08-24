@@ -94,7 +94,7 @@ func coreAuthorize(r *request) bool {
 			}
 		}
 		items := strings.Split(lines[0], ", ")
-		if r.URL == items[0] && r.Method == items[1] && isAllowedSubject {
+		if r.URL == items[0] && strings.ToLower(r.Method) == strings.ToLower(items[1]) && isAllowedSubject {
 			return true
 		}
 	}
