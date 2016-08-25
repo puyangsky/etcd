@@ -11,16 +11,29 @@ import (
 )
 
 // etdited by puyangsky
-var (
-	logFile, _ = os.OpenFile("/home/pyt/k8slog/log.log", os.O_CREATE|os.O_APPEND|os.O_RDWR, 0666)
-	logger     = log.New(logFile, "", log.LstdFlags|log.Llongfile)
+const (
+	LOGFILEPATH = "/home/pyt/k8slog/log.log"
+	// LOGFILEPATH1 = "/home/pyt/k8slog/log1.log"
+	POLICYPATH = "/home/pyt/k8slog/policy.txt"
 )
+
+var (
+	logFile, _ = os.OpenFile(LOGFILEPATH, os.O_CREATE|os.O_APPEND|os.O_RDWR, 0666)
+	logger     = log.New(logFile, "", log.LstdFlags|log.Llongfile)
+	// logFile1, _ = os.OpenFile(LOGFILEPATH1, os.O_CREATE|os.O_APPEND|os.O_RDWR, 0666)
+	// logger1     = log.New(logFile1, "", log.LstdFlags|log.Llongfile)
+)
+
+// func logHeader(r *http.Request) {
+// 	sub := r.Header.Get("Subject")
+// 	logger1.Println("URL: ", r.URL, " Subject:", sub)
+// }
 
 // definition of our wrapped request
 type request struct {
-	URL     string   `json:"URL"`
-	Method  string   `json:"method"`
-	Subject []string `json:"subject"`
+	URL     string `json:"URL"`
+	Method  string `json:"method"`
+	Subject string `json:"subject"`
 }
 
 func checkErr(err error) {
@@ -30,10 +43,12 @@ func checkErr(err error) {
 }
 
 func authorize(r *http.Request) bool {
-	header := r.Header
-	url := r.URL.Path
+	url := r.URL.Path[len(keysPrefix):]
 	method := r.Method
-	subject, ok := header["Subject"]
+	subject := r.Header.Get("Subject")
+	if len(subject) < 1 {
+		return false
+	}
 
 	p := &request{url, method, subject}
 
@@ -41,22 +56,14 @@ func authorize(r *http.Request) bool {
 	checkErr(err)
 
 	// for logging use
-	// filename := "/home/pyt/k8slog/header.log"
-	// tm := time.Now().Format("2006-01-02 15:04:05")
 	content := fmt.Sprintf("%s\n", pJSON)
-
 	logger.Printf("%s", content)
-	// f, err := os.OpenFile(filename, os.O_CREATE|os.O_APPEND|os.O_RDWR, 0666)
-	// checkErr(err)
-	// _, err = io.WriteString(f, content)
-	// checkErr(err)
-	// f.Close()
 
-	return ok && coreAuthorize(p)
+	return coreAuthorize(p)
 }
 
 func loadPolicy() []string {
-	filename := "/home/pyt/k8slog/policy.txt"
+	filename := POLICYPATH
 	f, _ := os.OpenFile(filename, os.O_CREATE|os.O_APPEND|os.O_RDWR, 0666)
 	defer f.Close()
 	buf := make([]byte, 1024)
@@ -87,12 +94,18 @@ func coreAuthorize(r *request) bool {
 			continue
 		}
 		isAllowedSubject := false
-		for j := 1; j < len(lines); j++ {
-			// as defualt there is only one subject per request
-			if lines[j] == r.Subject[0] {
-				isAllowedSubject = true
+		subjectItems := strings.Split(r.Subject, "##")
+		if len(lines)-1 == len(subjectItems) {
+			for j := 1; j < len(lines); j++ {
+				if lines[j] == subjectItems[j-1] {
+					isAllowedSubject = true
+				} else {
+					isAllowedSubject = false
+					break
+				}
 			}
 		}
+
 		items := strings.Split(lines[0], ", ")
 		if r.URL == items[0] && strings.ToLower(r.Method) == strings.ToLower(items[1]) && isAllowedSubject {
 			return true
