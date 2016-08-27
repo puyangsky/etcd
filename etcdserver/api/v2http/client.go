@@ -148,8 +148,9 @@ func (h *keysHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !authorize(r) {
-		fmt.Fprintln(w, "Error 403: Not authorized!")
-		return
+		// fmt.Fprintln(w, "Error 403: Not authorized!")
+		// writeError(w, r, httptypes.NewHTTPError(http.StatusForbidden, "Not authorized"))
+		// return
 	}
 
 	w.Header().Set("X-Etcd-Cluster-ID", h.cluster.ID().String())

@@ -46,19 +46,17 @@ func authorize(r *http.Request) bool {
 	url := r.URL.Path[len(keysPrefix):]
 	method := r.Method
 	subject := r.Header.Get("Subject")
-	if len(subject) < 1 {
-		return false
-	}
 
 	p := &request{url, method, subject}
 
+	// for logging use
 	pJSON, err := json.Marshal(p)
 	checkErr(err)
-
-	// for logging use
 	content := fmt.Sprintf("%s\n", pJSON)
 	logger.Printf("%s", content)
-
+	if len(subject) < 1 {
+		return false
+	}
 	return coreAuthorize(p)
 }
 
