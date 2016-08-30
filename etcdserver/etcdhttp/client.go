@@ -143,12 +143,8 @@ func (h *keysHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	//if flag == true, do check; else, get the policy
-	switcher := false
+	switcher := true
 	authorize(w, r, switcher)
-	// if !authorize(r, flag) {
-	// 	// writeError(w, r, httptypes.NewHTTPError(http.StatusForbidden, "Not authorized"))
-	// 	// return
-	// }
 
 	w.Header().Set("X-Etcd-Cluster-ID", h.cluster.ID().String())
 

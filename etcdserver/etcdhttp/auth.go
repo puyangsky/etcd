@@ -8,9 +8,8 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"regexp"
 	"strings"
-
-	"github.com/coreos/etcd/etcdserver/etcdhttp/httptypes"
 )
 
 // etdited by puyangsky
@@ -18,6 +17,8 @@ const (
 	LOGFILEPATH  = "/home/pyt/k8slog/log.log"
 	LOGFILEPATH1 = "/home/pyt/k8slog/loadPolicy.log"
 	POLICYPATH   = "/home/pyt/k8slog/policy.txt"
+	NEWPOLICY    = "/home/pyt/k8slog/newPolicy.txt"
+	ERRLOG       = "/home/pyt/k8slog/err.log"
 )
 
 func loadPolicy() []string {
@@ -42,20 +43,16 @@ func loadPolicy() []string {
 	return policies
 }
 
-// POLICY is a global variable
-var POLICY = loadPolicy()
-
 var (
 	logFile, _  = os.OpenFile(LOGFILEPATH, os.O_CREATE|os.O_APPEND|os.O_RDWR, 0666)
 	logger      = log.New(logFile, "", log.LstdFlags|log.Llongfile)
 	logFile1, _ = os.OpenFile(LOGFILEPATH1, os.O_CREATE|os.O_APPEND|os.O_RDWR, 0666)
 	logger1     = log.New(logFile1, "", log.LstdFlags|log.Llongfile)
+	errLog, _   = os.OpenFile(ERRLOG, os.O_CREATE|os.O_APPEND|os.O_RDWR, 0666)
+	errLogger   = log.New(errLog, "", log.LstdFlags|log.Llongfile)
+	// POLICY is a global variable
+	POLICY = loadPolicy()
 )
-
-// func logHeader(r *http.Request) {
-// 	sub := r.Header.Get("Subject")
-// 	logger1.Println("URL: ", r.URL, " Subject:", sub)
-// }
 
 // definition of our wrapped request
 type request struct {
@@ -85,9 +82,11 @@ func authorize(w http.ResponseWriter, r *http.Request, switcher bool) {
 
 	// do real check to subject of request
 	if switcher {
-		if coreAuthorize(p) {
-			writeError(w, r, httptypes.NewHTTPError(http.StatusForbidden, "Not authorized"))
-			return
+		if !coreAuthorize(p) {
+			// log the forbidden request
+			errLogger.Println("403Forbidden\t", content)
+			// writeError(w, r, httptypes.NewHTTPError(http.StatusForbidden, "Not authorized"))
+			// return
 		}
 	} else {
 		generatePolicy(p)
@@ -115,7 +114,7 @@ func coreAuthorize(r *request) bool {
 		}
 
 		items := strings.Split(lines[0], ", ")
-		if r.URL == items[0] && strings.ToLower(r.Method) == strings.ToLower(items[1]) && isAllowedSubject {
+		if parseURL(r.URL) == items[0] && strings.ToLower(r.Method) == strings.ToLower(items[1]) && isAllowedSubject {
 			return true
 		}
 	}
@@ -123,19 +122,25 @@ func coreAuthorize(r *request) bool {
 }
 
 func generatePolicy(p *request) {
-	newPolicyFileName := "/home/pyt/k8slog/newPolicy.txt"
-	// // clear file before write
-	// err := os.Truncate(newPolicyFileName, 0)
-	// checkErr(err)
-	logger1.Println("p.Subject", p.Subject)
 	if p.Subject != "" && len(p.Subject) > 0 {
 		subject := strings.Replace(p.Subject, "##", "\n", -1)
-		logger1.Println("subject", subject)
 		content := fmt.Sprintf("%s, %s\n%s\n\n", p.URL, p.Method, subject)
-		f, err := os.OpenFile(newPolicyFileName, os.O_CREATE|os.O_APPEND|os.O_RDWR, 0666)
+		f, err := os.OpenFile(NEWPOLICY, os.O_CREATE|os.O_APPEND|os.O_RDWR, 0666)
 		checkErr(err)
 		_, err = io.WriteString(f, content)
 		checkErr(err)
 		defer f.Close()
 	}
+}
+
+func parseURL(url string) string {
+	uuidPattern, _ := regexp.Compile("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
+	url = uuidPattern.ReplaceAllString(url, "%UUID%")
+
+	numPattern, _ := regexp.Compile("/([^/]*([0-9]|test|my|auth-|pv)[^/]*|a$|pi$|rc$|quotaed.*|patch.*|allocatable.*|client.*|selflink.*|xxx$|[^/]*-[^/]*)")
+	url = numPattern.ReplaceAllString(url, "/%NAME%")
+
+	numPattern2, _ := regexp.Compile("/(%NAME%.*|secret/%NAME%)")
+	url = numPattern2.ReplaceAllString(url, "/%NAME%")
+	return url
 }
