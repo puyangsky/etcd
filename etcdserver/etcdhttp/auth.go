@@ -2,7 +2,8 @@ package etcdhttp
 
 import (
 	"bytes"
-	"encoding/json"
+	"crypto/md5"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"log"
@@ -14,15 +15,16 @@ import (
 
 // etdited by puyangsky
 const (
-	LOGFILEPATH  = "/home/pyt/k8slog/log.log"
-	LOGFILEPATH1 = "/home/pyt/k8slog/loadPolicy.log"
-	POLICYPATH   = "/home/pyt/k8slog/policy.txt"
-	NEWPOLICY    = "/home/pyt/k8slog/newPolicy.txt"
-	ERRLOG       = "/home/pyt/k8slog/err.log"
+	// LOGFILEPATH  = "/home/pyt/k8slog/log.log"
+	// LOGFILEPATH1 = "/home/pyt/k8slog/loadPolicy.log"
+	POLICYPATH = "/home/pyt/k8slog/policy.txt"
+	NEWPOLICY  = "/home/pyt/k8slog/newPolicy.txt"
+	ERRLOG     = "/home/pyt/k8slog/err.log"
+	LINECOUNT  = 5
 )
 
 func loadPolicy() []string {
-	logger1.Println("Invoking loadPolicy...")
+	// logger1.Println("Invoking loadPolicy...")
 	filename := POLICYPATH
 	f, _ := os.OpenFile(filename, os.O_CREATE|os.O_APPEND|os.O_RDWR, 0666)
 	defer f.Close()
@@ -44,14 +46,17 @@ func loadPolicy() []string {
 }
 
 var (
-	logFile, _  = os.OpenFile(LOGFILEPATH, os.O_CREATE|os.O_APPEND|os.O_RDWR, 0666)
-	logger      = log.New(logFile, "", log.LstdFlags|log.Llongfile)
-	logFile1, _ = os.OpenFile(LOGFILEPATH1, os.O_CREATE|os.O_APPEND|os.O_RDWR, 0666)
-	logger1     = log.New(logFile1, "", log.LstdFlags|log.Llongfile)
-	errLog, _   = os.OpenFile(ERRLOG, os.O_CREATE|os.O_APPEND|os.O_RDWR, 0666)
-	errLogger   = log.New(errLog, "", log.LstdFlags|log.Llongfile)
+	// logFile, _  = os.OpenFile(LOGFILEPATH, os.O_CREATE|os.O_APPEND|os.O_RDWR, 0666)
+	// logger      = log.New(logFile, "", log.LstdFlags|log.Llongfile)
+	// logFile1, _ = os.OpenFile(LOGFILEPATH1, os.O_CREATE|os.O_APPEND|os.O_RDWR, 0666)
+	// logger1     = log.New(logFile1, "", log.LstdFlags|log.Llongfile)
+	errLog, _ = os.OpenFile(ERRLOG, os.O_CREATE|os.O_APPEND|os.O_RDWR, 0666)
+	errLogger = log.New(errLog, "", log.LstdFlags|log.Llongfile)
 	// POLICY is a global variable
-	POLICY = loadPolicy()
+	POLICY         = loadPolicy()
+	uuidPattern, _ = regexp.Compile("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
+	numPattern, _  = regexp.Compile("/([^/]*([0-9]|test|my|auth-|pv)[^/]*|a$|pi$|rc$|quotaed.*|patch.*|allocatable.*|client.*|selflink.*|xxx$|[^/]*-[^/]*)")
+	numPattern2, _ = regexp.Compile("/(%NAME%.*|secret/%NAME%)")
 )
 
 // definition of our wrapped request
@@ -75,19 +80,20 @@ func authorize(w http.ResponseWriter, r *http.Request, switcher bool) {
 	p := &request{url, method, subject}
 
 	// for logging use
-	pJSON, err := json.Marshal(p)
-	checkErr(err)
-	content := fmt.Sprintf("%s\n", pJSON)
-	logger.Printf("%s", content)
+	// pJSON, err := json.Marshal(p)
+	// checkErr(err)
+	// content := fmt.Sprintf("%s\n", pJSON)
+	// logger.Printf("%s", content)
 
 	// do real check to subject of request
 	if switcher {
-		if !coreAuthorize(p) {
-			// log the forbidden request
-			errLogger.Println("403Forbidden\t", content)
-			// writeError(w, r, httptypes.NewHTTPError(http.StatusForbidden, "Not authorized"))
-			// return
-		}
+		coreAuthorize(p)
+		// if !coreAuthorize(p) {
+		// 	// log the forbidden request
+		// 	errLogger.Println("403Forbidden\t", url)
+		// 	// writeError(w, r, httptypes.NewHTTPError(http.StatusForbidden, "Not authorized"))
+		// 	// return
+		// }
 	} else {
 		generatePolicy(p)
 	}
@@ -96,28 +102,65 @@ func authorize(w http.ResponseWriter, r *http.Request, switcher bool) {
 func coreAuthorize(r *request) bool {
 	policy := POLICY
 	for i := range policy {
-		lines := strings.Split(policy[i], "\n")
-		if len(lines) < 1 {
+		policyLines := strings.Split(policy[i], "\n")
+		if len(policyLines) < 1 {
 			continue
 		}
-		isAllowedSubject := false
+
 		subjectItems := strings.Split(r.Subject, "##")
-		if len(lines)-1 == len(subjectItems) {
-			for j := 1; j < len(lines); j++ {
-				if lines[j] == subjectItems[j-1] {
-					isAllowedSubject = true
-				} else {
-					isAllowedSubject = false
-					break
+		urlAndMethod := strings.Split(policyLines[0], ", ")
+		// isAllowedSubject := false
+
+		if parseURL(r.URL) == urlAndMethod[0] {
+			if strings.ToLower(r.Method) == strings.ToLower(urlAndMethod[1]) {
+				// //String Print Algorithm (SP)
+				// if len(policyLines)-1 == len(subjectItems) {
+				// 	for j := 1; j < len(policyLines); j++ {
+				// 		if policyLines[j] == subjectItems[j-1] {
+				// 			isAllowedSubject = true
+				// 		} else {
+				// 			isAllowedSubject = false
+				// 			break
+				// 		}
+				// 	}
+				// }
+				// Stack Level Count Algorithm (SLC)
+				// isAllowedSubject = (len(policyLines) == len(subjectItems)+1)
+
+				// //Hash Digest Algorithm (HD)
+				// hashRequestSubject := hash(strings.Join(subjectItems, "\n"))
+				// hashPolicyItem := hash(strings.Join(policyLines[1:], "\n"))
+				// isAllowedSubject = (hashPolicyItem == hashRequestSubject)
+
+				//Code Line Backtracking Algorithm (CLB)
+				min := LINECOUNT
+				if min > len(subjectItems) {
+					min = len(subjectItems)
+				}
+				if len(policyLines)-1 >= min {
+					// errLogger.Println(min)
+
+					reqCodeLineString := ""
+					policyCodeLineString := ""
+					for i := 0; i < min; i++ {
+						errLogger.Printf("%d,%d\n", min, i)
+						if len(strings.Split(subjectItems[i], ", ")) > 1 && len(strings.Split(policyLines[i+1], ", ")) > 1 {
+							reqCodeLineString += strings.Split(subjectItems[i], ", ")[1]
+							reqCodeLineString += "-"
+							policyCodeLineString += strings.Split(policyLines[i+1], ", ")[1]
+							policyCodeLineString += "-"
+						}
+					}
+					errLogger.Println(r.URL + "\trequestCodeLine:" + reqCodeLineString + "\tpolicyCodeLine :" + policyCodeLineString)
+					if reqCodeLineString == policyCodeLineString {
+						return true
+					}
+					// errLogger.Println(r.URL + "\tisAllow: false")
 				}
 			}
 		}
-
-		items := strings.Split(lines[0], ", ")
-		if parseURL(r.URL) == items[0] && strings.ToLower(r.Method) == strings.ToLower(items[1]) && isAllowedSubject {
-			return true
-		}
 	}
+
 	return false
 }
 
@@ -134,13 +177,16 @@ func generatePolicy(p *request) {
 }
 
 func parseURL(url string) string {
-	uuidPattern, _ := regexp.Compile("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
 	url = uuidPattern.ReplaceAllString(url, "%UUID%")
-
-	numPattern, _ := regexp.Compile("/([^/]*([0-9]|test|my|auth-|pv)[^/]*|a$|pi$|rc$|quotaed.*|patch.*|allocatable.*|client.*|selflink.*|xxx$|[^/]*-[^/]*)")
 	url = numPattern.ReplaceAllString(url, "/%NAME%")
-
-	numPattern2, _ := regexp.Compile("/(%NAME%.*|secret/%NAME%)")
 	url = numPattern2.ReplaceAllString(url, "/%NAME%")
 	return url
+}
+
+func hash(data string) string {
+	t := md5.New()
+	t.Write([]byte(data))
+	return hex.EncodeToString(t.Sum(nil))
+	// io.WriteString(t, data)
+	// return fmt.Sprintf("%x", t.Sum(nil))
 }
